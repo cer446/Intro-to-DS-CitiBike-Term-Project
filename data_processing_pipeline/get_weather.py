@@ -9,7 +9,7 @@ if len(sys.argv) > 1:
 newyork = (40.7142,-74.0064)
 units = 'auto'
 
-key = '682ab52358ffb984b491906b00547ecb'
+key = '<key>'
 
 base_url = 'https://api.forecast.io/forecast/' \
     '{}/{},{}?units=auto'.format(key, newyork[0], newyork[1])
