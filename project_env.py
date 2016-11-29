@@ -1,8 +1,10 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import pytz
 
 def parse_datetime(df):
+    eastern = pytz.timezone('US/Eastern')
     # Turn date columns from string to datetime64
     date_columns = [
         'last_reported',
@@ -11,7 +13,10 @@ def parse_datetime(df):
         'traffic_2_asof'
     ]
     for c in date_columns:
-        df[c] = pd.to_datetime(df[c], infer_datetime_format=True)
+        timestamps = df[c].as_matrix()
+        dates = pd.to_datetime(timestamps, unit='s').tz_localize(pytz.utc)
+        dates_local = dates.tz_convert(eastern)
+        df[c] = dates_local
 
 def scale_bikes_and_docks(data, capacity):
     data['num_bikes_available_scaled'] = data['num_bikes_available'] / capacity
@@ -48,6 +53,9 @@ def set_outdated_traffic_info_to_mean(data, plot=True):
 def drop_columns(data):
     return data.drop([
         'Unnamed: 0',
+        'Unnamed: 0.1',
+        'bike_timestamp',
+        'bike_station_id',
         'eightd_has_available_keys',
         'summary',
         'traffic_0_linkId',
@@ -59,7 +67,7 @@ def drop_columns(data):
         'traffic_0_speed', # unclean speeds
         'traffic_1_speed',
         'traffic_2_speed',
-        'time',
+        #'time',
         'icon',
         'weather_ts',
         'is_installed',
@@ -99,8 +107,8 @@ def drop_target_columns(data, leave_in='y_60m'):
 def bucket_y_variable(
         data,
         target='y_60m',
-        threshold_empty=.05,
-        threshold_full=.95,
+        threshold_empty=.1,
+        threshold_full=.9,
         plot=True):
     data = drop_target_columns(data, leave_in=target)
     raw_target = data[target].copy()
@@ -129,8 +137,8 @@ def bucket_y_variable(
 
     return data_valid.drop([target], axis=1)
 
-def load(station_id, log=True):
-    data = pd.read_csv('per_station/{}.csv'.format(station_id))
+def load(station_id, mode='train', log=True):
+    data = pd.read_csv('per_station_{}/{}.csv'.format(mode, station_id))
     if log:
         print('# of raw records:', len(data))
         #print(data.columns)
@@ -139,13 +147,8 @@ def load(station_id, log=True):
     get_time_features(data)
 
     if log:
-        data_random_slice = data.iloc[np.random.permutation(len(data))[:15]]
-        print(data_random_slice[[
-            'last_reported', 
-            'num_bikes_available_scaled', 
-            'day_of_week', 
-            'hour_of_day',
-            'is_weekend']])
+        data_random_slice = data.iloc[np.random.permutation(len(data))[:3]]
+        print(data_random_slice.T)
 
     set_outdated_traffic_info_to_mean(data, plot=log)
     data_drop = drop_columns(data)
@@ -153,33 +156,33 @@ def load(station_id, log=True):
         #print(data_drop.as_matrix().shape)
         print(data_drop.columns)
 
-    return data_drop
+    return data_drop.dropna()
 
-def split(data, train=0.7, dev=0.2, inorder=True, log=True):
-    assert train + dev <= 1.0
+def load_split_bucket(
+        station_id, 
+        target='y_60m',
+        threshold_empty=.1,
+        threshold_full=.9,
+        log=False):
 
-    if not inorder:
-        shuffle = data.copy()
-        shuffle = shuffle.iloc[np.random.permutation(len(shuffle))]
-        shuffle.reset_index(drop=True)
-        data = shuffle
+    def load_and_bucket(mode):
+        return bucket_y_variable(
+            load(station_id, mode=mode, log=log),
+            target=target,
+            threshold_empty=threshold_empty,
+            threshold_full=threshold_full,
+            plot=log)
 
-    train_size = int(train * len(data))
-    dev_size = int(dev * len(data))
-    test_size = len(data) - train_size - dev_size
-
-    print('(train, dev, test):', (train_size, dev_size, test_size))
-
-    training = data[:train_size]
-    dev = data[train_size:(train_size + dev_size)]
-    test = data[(train_size + dev_size):]
+    train = load_and_bucket('train')
+    dev = load_and_bucket('dev')
+    test = load_and_bucket('test')
 
     def make_xy(dataset):
         dX = dataset.drop('y', axis=1)
         dy = dataset['y']
         return dX, dy
 
-    training_X, training_y = make_xy(training)
+    training_X, training_y = make_xy(train)
     dev_X, dev_y = make_xy(dev)
     test_X, test_y = make_xy(test)
 
@@ -189,9 +192,7 @@ def split(data, train=0.7, dev=0.2, inorder=True, log=True):
             'test': (test_X, test_y),
             }
 
-def merge_training(split_data, more_training):
-    more_split = split(more_training, train=1.0, dev=0.0, log=False)
-
+def merge_training(split_data, more_split):
     orig_t_X, orig_t_y = split_data['train']
     more_t_X, more_t_y = more_split['train']
 
