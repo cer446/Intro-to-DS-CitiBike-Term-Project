@@ -204,3 +204,44 @@ def merge_training(split_data, more_split):
             'dev': split_data['dev'],
             'test': split_data['test']
             }
+
+def binarize(data, target=1):
+    '''Set target to 1 to predict full vs not full (1 = full), or -1 to
+    predict empty vs not empty (1 = empty)'''
+    def binarize_split(split):
+        X, y = split
+        return (X, (y == target).astype(np.int64))
+    
+    return {
+        'train': binarize_split(data['train']),
+        'dev': binarize_split(data['dev']),
+        'test': binarize_split(data['test']),
+    }
+
+def max_precision_for_recall(curve, target_recall=0.95):
+    '''Returns the max precision, threshold and recall of that precision,
+    across all models with recall at least a certain value.'''
+
+    precisions, recalls, thresholds = curve
+    max_pre, max_rec, max_thresh = (-1, None, None)
+    # The list is ordered on decreasing recall.
+    for i, precision in enumerate(precisions):
+        if recalls[i] < target_recall:
+            break
+        if precision > max_pre:
+            # Sacrifice some recall to increase precision.
+            max_pre, max_rec, max_thresh = precision, recalls[i], thresholds[i]
+    # The model with the highest precision with recall >= target_recall
+    return max_pre, max_rec, max_thresh
+
+def precision_at_recall(curve, target_recall=0.95):
+    '''Returns the precision, threshold and recall nearest (while still greater)
+    to a target recall value.'''
+
+    precisions, recalls, thresholds = curve
+    pre, rec, thresh = (None, None, None)
+    for i, precision in enumerate(precisions):
+        if recalls[i] < target_recall:
+            break
+        pre, rec, thresh = precision, recalls[i], thresholds[i]
+    return pre, rec, thresh
