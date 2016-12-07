@@ -82,7 +82,7 @@ def drop_columns(data):
         'num_docks_disabled',
         'num_docks_disabled_scaled',
 
-        'last_reported',
+        #'last_reported',
         'station_id',
 
         'traffic_0_distance',
@@ -178,18 +178,22 @@ def load_split_bucket(
     test = load_and_bucket('test')
 
     def make_xy(dataset):
-        dX = dataset.drop('y', axis=1)
+        dX = dataset.drop(['y', 'last_reported'], axis=1)
         dy = dataset['y']
-        return dX, dy
+        dt = dataset['last_reported']
+        return dX, dy, dt
 
-    training_X, training_y = make_xy(train)
-    dev_X, dev_y = make_xy(dev)
-    test_X, test_y = make_xy(test)
+    training_X, training_y, training_t = make_xy(train)
+    dev_X, dev_y, dev_t = make_xy(dev)
+    test_X, test_y, test_t = make_xy(test)
 
     return {
             'train': (training_X, training_y),
             'dev': (dev_X, dev_y),
             'test': (test_X, test_y),
+            'train_times': training_t,
+            'dev_times': dev_t,
+            'test_times': test_t
             }
 
 def merge_training(split_data, more_split):
@@ -202,7 +206,10 @@ def merge_training(split_data, more_split):
     return {
             'train': (merged_X, merged_y),
             'dev': split_data['dev'],
-            'test': split_data['test']
+            'test': split_data['test'],
+            'train_times': split_data['train_times'],
+            'dev_times': split_data['dev_times'],
+            'test_times': split_data['test_times'],
             }
 
 def binarize(data, target=1):
@@ -216,6 +223,9 @@ def binarize(data, target=1):
         'train': binarize_split(data['train']),
         'dev': binarize_split(data['dev']),
         'test': binarize_split(data['test']),
+        'train_times': data['train_times'],
+        'dev_times': data['dev_times'],
+        'test_times': data['test_times'],
     }
 
 def max_precision_for_recall(curve, target_recall=0.95):
