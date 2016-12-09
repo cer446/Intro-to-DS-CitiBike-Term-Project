@@ -68,12 +68,21 @@ def append_binarize(specs):
     
     return data
 
-def do_logreg(specs, plot=False):
+def do_logreg(specs, plot=False, merge_train_dev=False):
 
     split_binarized_data = append_binarize(specs)
     
     train_X, train_y = split_binarized_data['train']
     dev_X, dev_y = split_binarized_data['dev']
+    
+    # merge train and dev
+    if merge_train_dev:
+        # train and dev becomes train
+        train_X = pd.concat([train_X, dev_X])
+        train_y = pd.concat([train_y, dev_y])
+        # test becomes dev
+        dev_X, dev_y = split_binarized_data['test']
+       
     
     logreg = LogisticRegression(penalty=specs.penalty, C=specs.C)
     scaler = sklearn.preprocessing.StandardScaler()
@@ -83,7 +92,7 @@ def do_logreg(specs, plot=False):
         train_X_scaled = np.concatenate([
                 train_X_scaled,
                 np.square(train_X_scaled)], axis=1)
-    print('X shape:', train_X_scaled.shape)
+    print('Training set X shape:', train_X_scaled.shape)
     
     #print(pd.DataFrame(train_X_scaled).describe().T)
     logreg.fit(train_X_scaled, train_y)
@@ -97,6 +106,7 @@ def do_logreg(specs, plot=False):
     dev_pred = logreg.predict(dev_X_scaled)
     dev_decision = logreg.predict_proba(dev_X_scaled)[:,1]
     acc = sklearn.metrics.accuracy_score(dev_y, dev_pred)
+    print('Trained on train set of {} examples'.format(len(train_y)))
     print('Evaluating on dev set of {} examples'.format(len(dev_y)))
     print('Accuracy:', acc)
     
